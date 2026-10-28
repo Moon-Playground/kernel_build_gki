@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest>
+  <remote  name="mayuri"
+           fetch="https://github.com/Mayuri-Chan"
+           revision="android15-6.6-2025-04" />
+
+  <remove-project name="kernel/common" />
+
+  <project path="common" name="android_kernel_mediatek_6.6" remote="mayuri">
+    <linkfile src=".bazelignore" dest=".bazelignore" />
+  </project>
+</manifest>
