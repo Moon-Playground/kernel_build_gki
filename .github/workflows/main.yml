@@ -1,0 +1,89 @@
+name: Build Kernel
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      MANIFEST_REPO:
+        description: "Manifest url"
+        required: true
+        default: "git@github.com:Mayuri-Chan/android_kernel_xiaomi_gale_manifest.git"
+      MANIFEST_BRANCH:
+        description: "Manifest branch"
+        required: true
+        default: "lineage-24.0"
+      DEVICE:
+        description: "Target Device"
+        required: true
+        default: "mgk_64_k66"
+
+jobs:
+  build_kernel:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+      
+      - name: Free Disk Space
+        uses: rokibhasansagar/slimhub_actions@main
+
+      - name: Install Dependencies
+        run: |
+          sudo apt update -y
+          sudo apt install rsync bc cpio flex bison aptitude aria2 git python-is-python3 tar perl wget curl lz4 ccache -y
+          sudo aptitude install libssl-dev -y
+
+      - name: Setup Build Environment
+        run: |
+          mkdir -p "$HOME/.bin"
+          curl https://storage.googleapis.com/git-repo-downloads/repo > "$HOME/.bin/repo"
+          chmod +x "$HOME/.bin/repo"
+          echo "$HOME/.bin" >> $GITHUB_PATH
+          mkdir -p "$GITHUB_WORKSPACE/kernel"
+
+      - name: Setup SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          if [ -n "$SSH_PRIVATE_KEY" ]; then
+            mkdir -p ~/.ssh
+            chmod 700 ~/.ssh
+            echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_deploy
+            chmod 600 ~/.ssh/id_deploy
+
+            cat << 'EOF' >> ~/.ssh/config
+          Host github.com
+            IdentityFile ~/.ssh/id_deploy
+            StrictHostKeyChecking accept-new
+          EOF
+          fi
+
+      - name: Initialize Kernel Source
+        run: |
+          cd "$GITHUB_WORKSPACE/kernel"
+          repo init -u "${{ inputs.MANIFEST_REPO }}" -b "${{ inputs.MANIFEST_BRANCH }}" --depth=1
+
+      - name: Sync Sources
+        run: |
+            cd "$GITHUB_WORKSPACE/kernel"
+            repo sync -c -j$(nproc --all) --no-clone-bundle --no-tags --optimized-fetch --force-sync --prune
+
+      - name: Build Kernel
+        run: |
+            cd "$GITHUB_WORKSPACE/kernel"
+            ./build_${{ inputs.DEVICE }}.sh
+
+      - name: Prepare artifacts
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/dist/modules"
+          cp $GITHUB_WORKSPACE/kernel/out/${{ inputs.DEVICE }}/dist/Image.gz $GITHUB_WORKSPACE/dist/
+          cp $GITHUB_WORKSPACE/kernel/out/${{ inputs.DEVICE }}/dist/*.ko $GITHUB_WORKSPACE/dist/modules/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: kernel
+          path: "dist"
