@@ -51,6 +51,12 @@ jobs:
         run: |
             cd "$GITHUB_WORKSPACE/common"
             ~/.bin/repo sync -c -j$(nproc --all) --no-clone-bundle --no-tags --optimized-fetch --force-sync --prune
+  
+      - name: Clean Dirty Flags
+        run: |
+            cd "$GITHUB_WORKSPACE/common"
+            sed -i "/stable_scmversion_cmd/s/-maybe-dirty//g" build/kernel/kleaf/impl/stamp.bzl
+            sed -i 's/-dirty//' common/scripts/setlocalversion
 
       - name: Build Kernel
         run: |
