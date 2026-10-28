@@ -43,7 +43,7 @@ jobs:
       - name: Initialize Kernel Source
         run: |
           cd "$GITHUB_WORKSPACE/common"
-          ~/.bin/repo init -u https://android.googlesource.com/kernel/manifest -b "common-android15-6.6-2025-04" --depth=1
+          ~/.bin/repo init -u https://android.googlesource.com/kernel/manifest -b "common-android15-6.6-2025-06" --depth=1
           mkdir -p .repo/local_manifests
           cp "$GITHUB_WORKSPACE"/mtk.xml .repo/local_manifests/
 

@@ -2,7 +2,7 @@
 <manifest>
   <remote  name="mayuri"
            fetch="https://github.com/Mayuri-Chan"
-           revision="android15-6.6-2025-04" />
+           revision="android15-6.6-2025-06" />
 
   <remove-project name="kernel/common" />
 
