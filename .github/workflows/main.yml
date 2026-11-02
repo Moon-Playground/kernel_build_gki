@@ -14,7 +14,7 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
-      
+
       - name: Free Disk Space
         uses: endersonmenezes/free-disk-space@v3
         with:
@@ -43,7 +43,7 @@ jobs:
       - name: Initialize Kernel Source
         run: |
           cd "$GITHUB_WORKSPACE/common"
-          ~/.bin/repo init -u https://android.googlesource.com/kernel/manifest -b "common-android15-6.6-2025-06" --depth=1
+          ~/.bin/repo init -u https://android.googlesource.com/kernel/manifest -b "common-android15-6.6-2024-07" --depth=1
           mkdir -p .repo/local_manifests
           cp "$GITHUB_WORKSPACE"/mtk.xml .repo/local_manifests/
 
@@ -51,7 +51,7 @@ jobs:
         run: |
             cd "$GITHUB_WORKSPACE/common"
             ~/.bin/repo sync -c -j$(nproc --all) --no-clone-bundle --no-tags --optimized-fetch --force-sync --prune
-  
+
       - name: Clean Dirty Flags
         run: |
             cd "$GITHUB_WORKSPACE/common"
@@ -61,6 +61,7 @@ jobs:
       - name: Build Kernel
         run: |
             cd "$GITHUB_WORKSPACE/common"
+            sed -i 's#${scm_version}#-Mayuri#g' common/scripts/setlocalversion
             tools/bazel build --config=fast --lto=thin //common:kernel_aarch64_dist
 
       - name: Prepare artifacts
