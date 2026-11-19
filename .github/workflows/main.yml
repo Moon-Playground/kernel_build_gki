@@ -18,6 +18,14 @@ on:
         description: "Target Device"
         required: true
         default: "mgk_64_k66"
+      LIST_REPO:
+        description: "Repo contains module lists"
+        required: true
+        default: "git@github.com:xiaomi-gale/android_device_xiaomi_gale-kernels.git"
+      LIST_BRANCH:
+        description: "List repo branch"
+        required: true
+        default: "lineage-24.0"
 
 jobs:
   build_kernel:
@@ -26,7 +34,7 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
-      
+
       - name: Free Disk Space
         uses: rokibhasansagar/slimhub_actions@main
 
@@ -78,12 +86,38 @@ jobs:
 
       - name: Prepare artifacts
         run: |
-          mkdir -p "$GITHUB_WORKSPACE/dist/modules"
-          cp $GITHUB_WORKSPACE/kernel/out/${{ inputs.DEVICE }}/dist/Image.gz $GITHUB_WORKSPACE/dist/
-          cp $GITHUB_WORKSPACE/kernel/out/${{ inputs.DEVICE }}/dist/*.ko $GITHUB_WORKSPACE/dist/modules/
+          mkdir -p "$GITHUB_WORKSPACE/dist/kernel"
+          cp "$GITHUB_WORKSPACE"/kernel/out/${{ inputs.DEVICE }}/dist/Image.gz "$GITHUB_WORKSPACE"/dist/kernel/
+          cp "$GITHUB_WORKSPACE"/kernel/out/${{ inputs.DEVICE }}/dist/*dtb* "$GITHUB_WORKSPACE"/dist/kernel/
+          git clone ${{ inputs.LIST_REPO }} -b ${{ inputs.LIST_BRANCH }} "$GITHUB_WORKSPACE"/kernels
+          python sort.py $GITHUB_WORKSPACE/kernel/out/${{ inputs.DEVICE }}/dist
 
-      - name: Upload artifacts
+      - name: Upload kernel
         uses: actions/upload-artifact@v7
         with:
           name: kernel
-          path: "dist"
+          path: "dist/kernel"
+
+      - name: Upload system_dlkm
+        uses: actions/upload-artifact@v7
+        with:
+          name: system_dlkm
+          path: "dist/system_dlkm"
+
+      - name: Upload vendor_dlkm
+        uses: actions/upload-artifact@v7
+        with:
+          name: vendor_dlkm
+          path: "dist/vendor_dlkm"
+
+      - name: Upload vendor_ramdisk
+        uses: actions/upload-artifact@v7
+        with:
+          name: vendor_ramdisk
+          path: "dist/vendor_ramdisk"
+
+      - name: Upload misc_modules
+        uses: actions/upload-artifact@v7
+        with:
+          name: misc_modules
+          path: "dist/misc"
