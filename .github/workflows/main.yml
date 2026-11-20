@@ -51,6 +51,8 @@ jobs:
           chmod +x "$HOME/.bin/repo"
           echo "$HOME/.bin" >> $GITHUB_PATH
           mkdir -p "$GITHUB_WORKSPACE/kernel"
+          git config --global user.name "wulan17"
+          git config --global user.email "wulan17@wulan17.my.id"
 
       - name: Setup SSH
         env:
@@ -78,6 +80,46 @@ jobs:
         run: |
             cd "$GITHUB_WORKSPACE/kernel"
             repo sync -c -j$(nproc --all) --no-clone-bundle --no-tags --optimized-fetch --force-sync --prune
+
+      - name: Apply LRNG patches
+        run: |
+            git -C kernel/kernel-6.6 apply "$GITHUB_WORKSPACE"/patches/lrng/*.patch || return 1
+
+      - name: Apply BBRv3 patches
+        run: |
+            git -C kernel/kernel-6.6 apply "$GITHUB_WORKSPACE"/patches/bbrv3/*.patch || return 1
+
+      - name: Setup BakaSU
+        run: |
+            cd "$GITHUB_WORKSPACE/kernel/kernel-6.6"
+            git apply "$GITHUB_WORKSPACE"/patches/bakasu/*.patch || return 1
+            curl -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/main/kernel/setup.sh" | bash
+            KSU_REAL="$GITHUB_WORKSPACE/kernel/kernel-6.6/KernelSU/kernel"
+            sed -i 's|^LOCAL_GIT_EXISTS := .*|LOCAL_GIT_EXISTS := 1|' "$KSU_REAL/Kbuild"
+            sed -i "s|cd \$(KSU_SRC);|cd $KSU_REAL;|g" "$KSU_REAL/Kbuild"
+
+            # fail fast if the edit didn't land
+            grep -n 'LOCAL_GIT_EXISTS :=\|cd /home' "$KSU_REAL/Kbuild"
+            test -e "$KSU_REAL/../.git"
+
+      - name: Setup defconfig
+        run: |
+            P=kernel/kernel_device_modules-6.6
+            F=$P/mayuri.fragment
+            echo "CONFIG_KSU=y" > $F
+            echo "# CONFIG_KSU_TRACEPOINT_HOOK is not set" >> $F
+            echo "CONFIG_KSU_MANUAL_HOOK=y" >> $F
+            echo "CONFIG_TCP_CONG_BBR3=y" >> $F
+            echo "CONFIG_DEFAULT_BBR3=y" >> $F
+            echo 'CONFIG_DEFAULT_TCP_CONG="bbr3"' >> $F
+            echo 'exports_files(["mayuri.fragment"], visibility = ["//visibility:public"])' >> $P/BUILD.bazel
+            sed -i 's|--noenable_bzlmod \\|--noenable_bzlmod --defconfig_fragment=//kernel_device_modules-6.6:mayuri.fragment \\|' $P/build.sh
+            grep -n "defconfig_fragment" $P/build.sh
+
+      - name: Clean dirty flags
+        run: |
+            cd "$GITHUB_WORKSPACE/kernel/kernel-6.6/KernelSU"
+            git add --all && git commit --amend --no-edit
 
       - name: Build Kernel
         run: |

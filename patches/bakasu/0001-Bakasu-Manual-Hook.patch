@@ -1,0 +1,329 @@
+From 76e8ee8f9c9996123e07c6bbdc975340c0c4a325 Mon Sep 17 00:00:00 2001
+From: wulan17 <wulan17@komodos.id>
+Date: Fri, 20 Nov 2026 11:35:21 +0700
+Subject: [PATCH] Bakasu Manual Hook
+
+
+diff --git a/drivers/input/input.c b/drivers/input/input.c
+index 9bb1d3de723e..0545fe21b6f8 100644
+--- a/drivers/input/input.c
++++ b/drivers/input/input.c
+@@ -424,11 +424,22 @@ void input_handle_event(struct input_dev *dev,
+  * to 'seed' initial state of a switch or initial position of absolute
+  * axis, etc.
+  */
++#ifdef CONFIG_KSU_MANUAL_HOOK
++extern bool ksu_input_hook __read_mostly;
++extern __attribute__((cold)) int ksu_handle_input_handle_event(
++			unsigned int *type, unsigned int *code, int *value);
++#endif
++
+ void input_event(struct input_dev *dev,
+ 		 unsigned int type, unsigned int code, int value)
+ {
+ 	unsigned long flags;
+ 
++#ifdef CONFIG_KSU_MANUAL_HOOK
++	if (unlikely(ksu_input_hook))
++		ksu_handle_input_handle_event(&type, &code, &value);
++#endif
++
+ 	if (is_event_supported(type, dev->evbit, EV_MAX)) {
+ 
+ 		spin_lock_irqsave(&dev->event_lock, flags);
+diff --git a/fs/exec.c b/fs/exec.c
+index 0519876343a6..95849a34b69e 100644
+--- a/fs/exec.c
++++ b/fs/exec.c
+@@ -1862,6 +1862,15 @@ static int exec_binprm(struct linux_binprm *bprm)
+ 	return 0;
+ }
+ 
++#ifdef CONFIG_KSU_MANUAL_HOOK
++__attribute__((hot))
++extern int ksu_handle_execveat(int *fd, struct filename **filename_ptr,
++				void *argv, void *envp, int *flags);
++__attribute__((hot))
++extern int ksu_handle_post_execveat(int *fd, struct filename **filename_ptr,
++				void *argv, void *envp, int *flags, int *retval);
++#endif
++
+ /*
+  * sys_execve() executes a new program.
+  */
+@@ -1947,6 +1956,10 @@ static int do_execveat_common(int fd, struct filename *filename,
+ 	struct linux_binprm *bprm;
+ 	int retval;
+ 
++#ifdef CONFIG_KSU_MANUAL_HOOK
++	ksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);
++#endif
++
+ 	if (IS_ERR(filename))
+ 		return PTR_ERR(filename);
+ 
+@@ -2020,6 +2033,11 @@ static int do_execveat_common(int fd, struct filename *filename,
+ 	free_bprm(bprm);
+ 
+ out_ret:
++
++#ifdef CONFIG_KSU_MANUAL_HOOK
++	ksu_handle_post_execveat(&fd, &filename, &argv, &envp, &flags, &retval);
++#endif
++
+ 	putname(filename);
+ 	return retval;
+ }
+diff --git a/fs/open.c b/fs/open.c
+index 0641cb3fdd6b..89bbe1919cf7 100644
+--- a/fs/open.c
++++ b/fs/open.c
+@@ -527,8 +527,17 @@ static long do_faccessat(int dfd, const char __user *filename, int mode, int fla
+ 	return res;
+ }
+ 
++#ifdef CONFIG_KSU_MANUAL_HOOK
++__attribute__((hot))
++extern int ksu_handle_faccessat(int *dfd, const char __user **filename_user,
++				int *mode, int *flags);
++#endif
++
+ SYSCALL_DEFINE3(faccessat, int, dfd, const char __user *, filename, int, mode)
+ {
++#ifdef CONFIG_KSU_MANUAL_HOOK
++	ksu_handle_faccessat(&dfd, &filename, &mode, NULL);
++#endif
+ 	return do_faccessat(dfd, filename, mode, 0);
+ }
+ 
+diff --git a/fs/read_write.c b/fs/read_write.c
+index 06649023585c..aced1f4ff6b4 100644
+--- a/fs/read_write.c
++++ b/fs/read_write.c
+@@ -619,8 +619,18 @@ ssize_t ksys_read(unsigned int fd, char __user *buf, size_t count)
+ 	return ret;
+ }
+ 
++#ifdef CONFIG_KSU_MANUAL_HOOK
++extern bool ksu_init_rc_hook __read_mostly;
++extern __attribute__((cold)) int ksu_handle_sys_read(unsigned int fd,
++				char __user **buf_ptr, size_t *count_ptr);
++#endif
++
+ SYSCALL_DEFINE3(read, unsigned int, fd, char __user *, buf, size_t, count)
+ {
++#ifdef CONFIG_KSU_MANUAL_HOOK
++	if (unlikely(ksu_init_rc_hook))
++		ksu_handle_sys_read(fd, &buf, &count);
++#endif
+ 	return ksys_read(fd, buf, count);
+ }
+ 
+diff --git a/fs/stat.c b/fs/stat.c
+index 517fa4ed885e..26f89f229669 100644
+--- a/fs/stat.c
++++ b/fs/stat.c
+@@ -453,6 +453,17 @@ SYSCALL_DEFINE2(newlstat, const char __user *, filename,
+ 	return cp_new_stat(&stat, statbuf);
+ }
+ 
++#ifdef CONFIG_KSU_MANUAL_HOOK
++__attribute__((hot))
++extern int ksu_handle_stat(int *dfd, const char __user **filename_user,
++				int *flags);
++
++extern void ksu_handle_newfstat_ret(unsigned int *fd, struct stat __user **statbuf_ptr);
++#if defined(__ARCH_WANT_STAT64) || defined(__ARCH_WANT_COMPAT_STAT64)
++extern void ksu_handle_fstat64_ret(unsigned long *fd, struct stat64 __user **statbuf_ptr); // optional
++#endif
++#endif
++
+ #if !defined(__ARCH_WANT_STAT64) || defined(__ARCH_WANT_SYS_NEWFSTATAT)
+ SYSCALL_DEFINE4(newfstatat, int, dfd, const char __user *, filename,
+ 		struct stat __user *, statbuf, int, flag)
+@@ -460,6 +471,9 @@ SYSCALL_DEFINE4(newfstatat, int, dfd, const char __user *, filename,
+ 	struct kstat stat;
+ 	int error;
+ 
++#ifdef CONFIG_KSU_MANUAL_HOOK
++	ksu_handle_stat(&dfd, &filename, &flag);
++#endif
+ 	error = vfs_fstatat(dfd, filename, &stat, flag);
+ 	if (error)
+ 		return error;
+@@ -475,6 +489,9 @@ SYSCALL_DEFINE2(newfstat, unsigned int, fd, struct stat __user *, statbuf)
+ 	if (!error)
+ 		error = cp_new_stat(&stat, statbuf);
+ 
++#ifdef CONFIG_KSU_MANUAL_HOOK
++	ksu_handle_newfstat_ret(&fd, &statbuf);
++#endif
+ 	return error;
+ }
+ #endif
+@@ -602,6 +619,9 @@ SYSCALL_DEFINE2(fstat64, unsigned long, fd, struct stat64 __user *, statbuf)
+ 	if (!error)
+ 		error = cp_new_stat64(&stat, statbuf);
+ 
++#ifdef CONFIG_KSU_MANUAL_HOOK // for 32-bit
++	ksu_handle_fstat64_ret(&fd, &statbuf);
++#endif
+ 	return error;
+ }
+ 
+@@ -611,6 +631,9 @@ SYSCALL_DEFINE4(fstatat64, int, dfd, const char __user *, filename,
+ 	struct kstat stat;
+ 	int error;
+ 
++#ifdef CONFIG_KSU_MANUAL_HOOK // 32-bit su
++	ksu_handle_stat(&dfd, &filename, &flag);
++#endif
+ 	error = vfs_fstatat(dfd, filename, &stat, flag);
+ 	if (error)
+ 		return error;
+@@ -789,6 +812,7 @@ COMPAT_SYSCALL_DEFINE2(newfstat, unsigned int, fd,
+ 
+ 	if (!error)
+ 		error = cp_compat_stat(&stat, statbuf);
++
+ 	return error;
+ }
+ #endif
+diff --git a/kernel/reboot.c b/kernel/reboot.c
+index 344ceaf5ed13..5b7dc4af15e8 100644
+--- a/kernel/reboot.c
++++ b/kernel/reboot.c
+@@ -701,6 +701,11 @@ DEFINE_MUTEX(system_transition_mutex);
+  *
+  * reboot doesn't sync: do that yourself before calling this.
+  */
++
++#ifdef CONFIG_KSU_MANUAL_HOOK
++extern int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd, void __user **arg);
++#endif
++
+ SYSCALL_DEFINE4(reboot, int, magic1, int, magic2, unsigned int, cmd,
+ 		void __user *, arg)
+ {
+@@ -708,6 +713,9 @@ SYSCALL_DEFINE4(reboot, int, magic1, int, magic2, unsigned int, cmd,
+ 	char buffer[256];
+ 	int ret = 0;
+ 
++#ifdef CONFIG_KSU_MANUAL_HOOK
++	ksu_handle_sys_reboot(magic1, magic2, cmd, &arg);
++#endif
+ 	/* We only trust the superuser with rebooting the system. */
+ 	if (!ns_capable(pid_ns->user_ns, CAP_SYS_BOOT))
+ 		return -EPERM;
+diff --git a/kernel/sys.c b/kernel/sys.c
+index c6b0141e4135..e987cc8476d9 100644
+--- a/kernel/sys.c
++++ b/kernel/sys.c
+@@ -661,6 +661,9 @@ SYSCALL_DEFINE1(setuid, uid_t, uid)
+ 	return __sys_setuid(uid);
+ }
+ 
++#ifdef CONFIG_KSU_MANUAL_HOOK
++extern int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid);
++#endif
+ 
+ /*
+  * This function implements a generic ability to update ruid, euid,
+@@ -675,6 +678,10 @@ long __sys_setresuid(uid_t ruid, uid_t euid, uid_t suid)
+ 	kuid_t kruid, keuid, ksuid;
+ 	bool ruid_new, euid_new, suid_new;
+ 
++#ifdef CONFIG_KSU_MANUAL_HOOK
++       (void)ksu_handle_setresuid(ruid, euid, suid);
++#endif
++
+ 	kruid = make_kuid(ns, ruid);
+ 	keuid = make_kuid(ns, euid);
+ 	ksuid = make_kuid(ns, suid);
+diff --git a/security/selinux/hooks.c b/security/selinux/hooks.c
+index 68d1f244e385..62121adeb44f 100644
+--- a/security/selinux/hooks.c
++++ b/security/selinux/hooks.c
+@@ -264,7 +264,7 @@ static inline u32 task_sid_obj(const struct task_struct *task)
+ 	return sid;
+ }
+ 
+-static int inode_doinit_with_dentry(struct inode *inode, struct dentry *opt_dentry);
++int inode_doinit_with_dentry(struct inode *inode, struct dentry *opt_dentry);
+ 
+ /*
+  * Try reloading inode security labels that have been marked as invalid.  The
+@@ -1410,7 +1410,7 @@ static int inode_doinit_use_xattr(struct inode *inode, struct dentry *dentry,
+ }
+ 
+ /* The inode's security attributes must be initialized before first use. */
+-static int inode_doinit_with_dentry(struct inode *inode, struct dentry *opt_dentry)
++int inode_doinit_with_dentry(struct inode *inode, struct dentry *opt_dentry)
+ {
+ 	struct superblock_security_struct *sbsec = NULL;
+ 	struct inode_security_struct *isec = selinux_inode(inode);
+@@ -3173,7 +3173,7 @@ static bool has_cap_mac_admin(bool audit)
+ 	return true;
+ }
+ 
+-static int selinux_inode_setxattr(struct mnt_idmap *idmap,
++int selinux_inode_setxattr(struct mnt_idmap *idmap,
+ 				  struct dentry *dentry, const char *name,
+ 				  const void *value, size_t size, int flags)
+ {
+diff --git a/security/selinux/selinuxfs.c b/security/selinux/selinuxfs.c
+index b8c263457911..2699e89a29de 100644
+--- a/security/selinux/selinuxfs.c
++++ b/security/selinux/selinuxfs.c
+@@ -262,7 +262,7 @@ static int sel_mmap_handle_status(struct file *filp,
+ 			       size, vma->vm_page_prot);
+ }
+ 
+-static const struct file_operations sel_handle_status_ops = {
++const struct file_operations sel_handle_status_ops = {
+ 	.open		= sel_open_handle_status,
+ 	.read		= sel_read_handle_status,
+ 	.mmap		= sel_mmap_handle_status,
+@@ -798,7 +798,7 @@ static ssize_t sel_write_relabel(struct file *file, char *buf, size_t size);
+ static ssize_t sel_write_user(struct file *file, char *buf, size_t size);
+ static ssize_t sel_write_member(struct file *file, char *buf, size_t size);
+ 
+-static ssize_t (*const write_op[])(struct file *, char *, size_t) = {
++ssize_t (*const write_op[])(struct file *, char *, size_t) = {
+ 	[SEL_ACCESS] = sel_write_access,
+ 	[SEL_CREATE] = sel_write_create,
+ 	[SEL_RELABEL] = sel_write_relabel,
+diff --git a/security/selinux/ss/services.c b/security/selinux/ss/services.c
+index e5d143145c0a..0bf6a415867f 100644
+--- a/security/selinux/ss/services.c
++++ b/security/selinux/ss/services.c
+@@ -87,7 +87,7 @@ static int sidtab_entry_to_string(struct policydb *policydb,
+ 				  char **scontext,
+ 				  u32 *scontext_len);
+ 
+-static void context_struct_compute_av(struct policydb *policydb,
++void context_struct_compute_av(struct policydb *policydb,
+ 				      struct context *scontext,
+ 				      struct context *tcontext,
+ 				      u16 tclass,
+@@ -454,7 +454,7 @@ static int dump_masked_av_helper(void *k, void *d, void *args)
+ 	return 0;
+ }
+ 
+-static void security_dump_masked_av(struct policydb *policydb,
++void security_dump_masked_av(struct policydb *policydb,
+ 				    struct context *scontext,
+ 				    struct context *tcontext,
+ 				    u16 tclass,
+@@ -610,7 +610,7 @@ void services_compute_xperms_drivers(
+  * Compute access vectors and extended permissions based on a context
+  * structure pair for the permissions in a particular class.
+  */
+-static void context_struct_compute_av(struct policydb *policydb,
++void context_struct_compute_av(struct policydb *policydb,
+ 				      struct context *scontext,
+ 				      struct context *tcontext,
+ 				      u16 tclass,
+-- 
+2.56.0
+
