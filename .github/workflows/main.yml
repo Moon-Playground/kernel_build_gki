@@ -93,6 +93,10 @@ jobs:
         run: |
             git -C kernel/kernel-6.6 apply "$GITHUB_WORKSPACE"/patches/ssg/*.patch
 
+      - name: Apply NTSync patches
+        run: |
+            git -C kernel/kernel-6.6 apply "$GITHUB_WORKSPACE"/patches/ntsync/*.patch
+
       - name: Setup BakaSU
         run: |
             cd "$GITHUB_WORKSPACE/kernel/kernel-6.6"
@@ -118,6 +122,7 @@ jobs:
             echo 'CONFIG_DEFAULT_TCP_CONG="bbr3"' >> $F
             echo "CONFIG_MQ_IOSCHED_SSG=y" >> $F
             echo "CONFIG_MQ_IOSCHED_SSG_CGROUP=y" >> $F
+            echo "CONFIG_NTSYNC=y" >> $F
             echo 'exports_files(["mayuri.fragment"], visibility = ["//visibility:public"])' >> $P/BUILD.bazel
             sed -i 's|--noenable_bzlmod \\|--noenable_bzlmod --defconfig_fragment=//kernel_device_modules-6.6:mayuri.fragment \\|' $P/build.sh
             grep -n "defconfig_fragment" $P/build.sh
