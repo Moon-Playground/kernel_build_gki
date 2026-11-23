@@ -9,11 +9,11 @@ on:
       MANIFEST_REPO:
         description: "Manifest url"
         required: true
-        default: "git@github.com:Mayuri-Chan/android_kernel_xiaomi_gale_manifest.git"
+        default: "git@github.com:halcyonlv/kernel_xiaomi_gale_manifest.git"
       MANIFEST_BRANCH:
         description: "Manifest branch"
         required: true
-        default: "lineage-24.0"
+        default: "17.0"
       DEVICE:
         description: "Target Device"
         required: true
@@ -21,11 +21,11 @@ on:
       LIST_REPO:
         description: "Repo contains module lists"
         required: true
-        default: "git@github.com:xiaomi-gale/android_device_xiaomi_gale-kernels.git"
+        default: "git@github.com:halcyonlv/device_xiaomi_gale-kernels.git"
       LIST_BRANCH:
         description: "List repo branch"
         required: true
-        default: "lineage-24.0"
+        default: "17.0"
 
 jobs:
   build_kernel:
@@ -129,8 +129,9 @@ jobs:
 
       - name: Clean dirty flags
         run: |
-            cd "$GITHUB_WORKSPACE/kernel/kernel-6.6/KernelSU"
-            git add --all && git commit --amend --no-edit
+            git -C "$GITHUB_WORKSPACE/kernel/kernel-6.6/KernelSU" add --all && git -C "$GITHUB_WORKSPACE/kernel/kernel-6.6/KernelSU" commit --amend --no-edit
+            git -C "$GITHUB_WORKSPACE/kernel/kernel-6.6" add --all && git -C "$GITHUB_WORKSPACE/kernel/kernel-6.6" commit --amend --no-edit
+            git -C "$GITHUB_WORKSPACE/kernel/kernel_device_modules-6.6" add --all && git -C "$GITHUB_WORKSPACE/kernel/kernel_device_modules-6.6" commit --amend --no-edit
 
       - name: Build Kernel
         run: |
