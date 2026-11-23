@@ -9,7 +9,7 @@ on:
       MANIFEST_REPO:
         description: "Manifest url"
         required: true
-        default: "git@github.com:Mayuri-Chan/android_kernel_xiaomi_gale_manifest.git"
+        default: "https://github.com/LineageOS/android_kernel_xiaomi_gale_manifest.git"
       MANIFEST_BRANCH:
         description: "Manifest branch"
         required: true
@@ -21,7 +21,7 @@ on:
       LIST_REPO:
         description: "Repo contains module lists"
         required: true
-        default: "git@github.com:xiaomi-gale/android_device_xiaomi_gale-kernels.git"
+        default: "https://github.com/LineageOS/android_device_xiaomi_gale-kernels.git"
       LIST_BRANCH:
         description: "List repo branch"
         required: true
